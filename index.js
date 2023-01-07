@@ -17,6 +17,7 @@ async function run() {
         const userCollection = client.db('uptodate').collection('users')
         const blogsCollection = client.db('uptodate').collection('blogs')
         const bloggerRequestCollection = client.db('uptodate').collection('bloggerRequest')
+        const commentsCollection = client.db('uptodate').collection('comments')
 
         //users =================================================
         app.post('/users', async (req, res) => {
@@ -34,7 +35,7 @@ async function run() {
         })
         app.delete('/users/:id', async (req, res) => {
             const id = req.params.id
-            const filter = { _id: ObjectId(id) }           
+            const filter = { _id: ObjectId(id) }
             const result = await userCollection.deleteOne(filter)
             res.send(result)
         })
@@ -43,7 +44,7 @@ async function run() {
             const email = req.params.email
             const filter = { email }
             const user = await userCollection.findOne(filter)
-            res.send({isAdmin: user?.role === 'admin'})
+            res.send({ isAdmin: user?.role === 'admin' })
         })
 
         // bloggers request ===========================================
@@ -58,7 +59,7 @@ async function run() {
         })
         app.delete('/blogger-request/:id', async (req, res) => {
             const id = req.params.id
-            const filter = {_id: ObjectId(id)}
+            const filter = { _id: ObjectId(id) }
             const result = await bloggerRequestCollection.deleteOne(filter)
             res.send(result)
         })
@@ -77,7 +78,7 @@ async function run() {
 
         // bloggers
         app.get('/bloggers', async (req, res) => {
-            const filter = {role: 'blogger'}
+            const filter = { role: 'blogger' }
             const result = await userCollection.find(filter).toArray()
             res.send(result)
         })
@@ -97,7 +98,7 @@ async function run() {
             const email = req.params.email
             const filter = { email }
             const user = await userCollection.findOne(filter)
-            res.send({isBlogger: user?.role === 'blogger'})
+            res.send({ isBlogger: user?.role === 'blogger' })
         })
 
         // blogs ==============================================
@@ -112,21 +113,71 @@ async function run() {
         })
         app.get('/blogs/:id', async (req, res) => {
             const id = req.params.id
-            const blog = {_id: ObjectId(id)}
+            const blog = { _id: ObjectId(id) }
             const result = await blogsCollection.findOne(blog)
             res.send(result)
         })
         app.delete('/blogs/:id', async (req, res) => {
             const id = req.params.id
-            const filter = {_id: ObjectId(id)}
-            const result = await blogsCollection.deleteOne(filter)
+            const filter = { _id: ObjectId(id) }
+            const result = await blogsCollectionn.deleteOne(filter)
             res.send(result)
         })
-        
-    } finally {}
+
+        // comments
+        app.post('/blogs/comments', async (req, res) => {
+            const comment = req.body
+            const result = await commentsCollection.insertOne(comment)
+            res.send(result)
+        })
+        app.get('/blogs/comments/:id', async (req, res) => {
+            const id = req.params.id
+            const filter = { blogId: id }
+            const result = await commentsCollection.find(filter).sort({date:-1, time:-1}).toArray()
+            res.send(result)
+        })
+        app.delete('/blogs/comments/:id', async (req, res) => {
+            const id = req.params.id
+            const filter = { _id: ObjectId(id) }
+            const result = await commentsCollection.deleteOne(filter)
+            res.send(result)
+        })
+        app.put('/blogs/comments/:id', async (req, res) => {
+            const id = req.params.id
+            const editedInfo = req.body
+            const {editedDate, editedTime, editedComment} = editedInfo
+            const filter = { _id: ObjectId(id) }
+            const options = { upsert: true }
+            const updatedDoc = {
+                $set: {
+                    comment: editedComment,
+                    editedDate,
+                    editedTime
+                }
+            }
+            const result = await commentsCollection.updateOne(filter, updatedDoc, options)
+            res.send(result)
+        })
+
+        // dashboard blogs
+        app.get('/dashboard/blogs/:email', async (req, res) => {
+            const email = req.params.email
+            console.log(email)
+            if (email === 'shahtazrahman17@gmail.com') {
+                const result = await blogsCollection.find({}).toArray()
+                res.send(result)
+            }
+            else {
+                const filter = { authorEmail: email }
+                const result = await blogsCollection.find(filter).toArray()
+                res.send(result)
+            }
+        })
+
+    } finally { }
 }
 
-run().catch(err=>console.error(err))
+run().catch(err => console.error(err))
 
 
 app.get('/', (req, res) => {
