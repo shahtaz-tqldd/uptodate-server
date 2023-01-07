@@ -18,6 +18,7 @@ async function run() {
         const blogsCollection = client.db('uptodate').collection('blogs')
         const bloggerRequestCollection = client.db('uptodate').collection('bloggerRequest')
         const commentsCollection = client.db('uptodate').collection('comments')
+        const categoriesCollection = client.db('uptodate').collection('categories')
 
         //users =================================================
         app.post('/users', async (req, res) => {
@@ -120,7 +121,7 @@ async function run() {
         app.delete('/blogs/:id', async (req, res) => {
             const id = req.params.id
             const filter = { _id: ObjectId(id) }
-            const result = await blogsCollectionn.deleteOne(filter)
+            const result = await blogsCollection.deleteOne(filter)
             res.send(result)
         })
 
@@ -133,7 +134,7 @@ async function run() {
         app.get('/blogs/comments/:id', async (req, res) => {
             const id = req.params.id
             const filter = { blogId: id }
-            const result = await commentsCollection.find(filter).sort({date:-1, time:-1}).toArray()
+            const result = await commentsCollection.find(filter).sort({time:1, date:1}).toArray()
             res.send(result)
         })
         app.delete('/blogs/comments/:id', async (req, res) => {
@@ -172,6 +173,23 @@ async function run() {
                 const result = await blogsCollection.find(filter).toArray()
                 res.send(result)
             }
+        })
+
+        // categories
+        app.post('/blogs/categories', async (req, res) => {
+            const data = req.body
+            const result = await categoriesCollection.insertOne(data)
+            res.send(result)
+        })
+        app.get('/categories', async (req, res) => {
+            const result = await categoriesCollection.find({}).toArray()
+            res.send(result)
+        })
+        app.delete('/blogs/categories/:id', async (req, res) => {
+            const id = req.params.id
+            const filter = { _id: ObjectId(id) }
+            const result = await categoriesCollection.deleteOne(filter)
+            res.send(result)
         })
 
     } finally { }
