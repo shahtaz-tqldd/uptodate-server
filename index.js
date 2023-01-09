@@ -19,6 +19,8 @@ async function run() {
         const bloggerRequestCollection = client.db('uptodate').collection('bloggerRequest')
         const commentsCollection = client.db('uptodate').collection('comments')
         const categoriesCollection = client.db('uptodate').collection('categories')
+        const savedCollection = client.db('uptodate').collection('savedPost')
+        const favouriteCollection = client.db('uptodate').collection('favouritePost')
 
         //users =================================================
         app.post('/users', async (req, res) => {
@@ -109,8 +111,26 @@ async function run() {
             res.send(result)
         })
         app.get('/blogs', async (req, res) => {
-            const result = await blogsCollection.find({}).toArray()
-            res.send(result)
+            const {category, search} = req.query
+            const posts = await blogsCollection.find({}).toArray()
+            
+            if (category === 'All' && !search) {
+                const result = await blogsCollection.find({}).toArray()
+                res.send(result)
+            }
+            else if (search) {
+                const result = posts.filter(post=>post.title.toLowerCase().includes(search))
+                res.send(result)
+            }
+            else if (category) {
+                const filter = {category: category}
+                const result = await blogsCollection.find(filter).toArray()
+                res.send(result)
+            }
+            else {
+                const result = await blogsCollection.find({}).toArray()
+                res.send(result)
+            }
         })
         app.get('/blogs/:id', async (req, res) => {
             const id = req.params.id
@@ -134,7 +154,7 @@ async function run() {
         app.get('/blogs/comments/:id', async (req, res) => {
             const id = req.params.id
             const filter = { blogId: id }
-            const result = await commentsCollection.find(filter).sort({time:1, date:1}).toArray()
+            const result = await commentsCollection.find(filter).sort({ time: 1, date: 1 }).toArray()
             res.send(result)
         })
         app.delete('/blogs/comments/:id', async (req, res) => {
@@ -146,7 +166,7 @@ async function run() {
         app.put('/blogs/comments/:id', async (req, res) => {
             const id = req.params.id
             const editedInfo = req.body
-            const {editedDate, editedTime, editedComment} = editedInfo
+            const { editedDate, editedTime, editedComment } = editedInfo
             const filter = { _id: ObjectId(id) }
             const options = { upsert: true }
             const updatedDoc = {
@@ -189,6 +209,60 @@ async function run() {
             const id = req.params.id
             const filter = { _id: ObjectId(id) }
             const result = await categoriesCollection.deleteOne(filter)
+            res.send(result)
+        })
+
+        // saved post
+        app.post('/blogs/save', async (req, res) => {
+            const saved = req.body
+            const filter = { postId: saved.postId, savedBy: saved.savedBy }
+            const post = await savedCollection.findOne(filter)
+            if (post?.postId !== saved.postId) {
+                const result = await savedCollection.insertOne(saved)
+                res.send(result)
+            }
+            else {
+                res.send({ message: "You already saved this post" })
+            }
+        })
+        app.get('/blogs/saved/:email', async (req, res) => {
+            const email = req.params.email
+            const filter = { savedBy: email }
+            const result = await savedCollection.find(filter).toArray()
+            res.send(result)
+        })
+        app.delete('/blogs/saved/:id', async (req, res) => {
+            const id = req.params.id
+            const filter = { _id: ObjectId(id) }
+            const result = await savedCollection.deleteOne(filter)
+            res.send(result)
+        })
+
+        // favourite post
+        app.post('/blogs/favourites', async (req, res) => {
+            const favourite = req.body
+            const { postId, savedBy } = favourite
+            const post = await favouriteCollection.findOne({
+                $and: [{ postId }, { savedBy }]
+            })
+            if (post) {
+                res.send({ message: "This post is already in your favourite" })
+            }
+            else {
+                const result = await favouriteCollection.insertOne(favourite)
+                res.send(result)
+            }
+        })
+        app.get('/blogs/favourites/:email', async (req, res) => {
+            const email = req.params.email
+            const filter = { savedBy: email }
+            const result = await favouriteCollection.find(filter).toArray()
+            res.send(result)
+        })
+        app.delete('/blogs/favourites/:id', async (req, res) => {
+            const id = req.params.id
+            const filter = { _id: ObjectId(id) }
+            const result = await favouriteCollection.deleteOne(filter)
             res.send(result)
         })
 
