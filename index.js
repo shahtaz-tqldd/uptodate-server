@@ -1,4 +1,5 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const SSLCommerzPayment = require('sslcommerz-lts');
 const express = require('express');
 const app = express()
 const cors = require('cors')
@@ -8,6 +9,10 @@ require('dotenv').config();
 // middleware
 app.use(cors())
 app.use(express.json())
+
+const storeId = process.env.STORE_ID
+const storePassword = process.env.STORE_PASSWORD
+const isLive = false
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.1uor19o.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
@@ -99,9 +104,15 @@ async function run() {
         })
         app.get('/users/blogger/:email', async (req, res) => {
             const email = req.params.email
-            const filter = { email }
+            const filter = { email, paid:true }
             const user = await userCollection.findOne(filter)
             res.send({ isBlogger: user?.role === 'blogger' })
+        })
+        app.get('/users/blogger/accepted/:email', async (req, res) => {
+            const email = req.params.email
+            const filter = { email }
+            const user = await userCollection.findOne(filter)
+            res.send({ isAccepted: user?.role === 'blogger' })
         })
 
         // blogs ==============================================
@@ -111,19 +122,19 @@ async function run() {
             res.send(result)
         })
         app.get('/blogs', async (req, res) => {
-            const {category, search} = req.query
+            const { category, search } = req.query
             const posts = await blogsCollection.find({}).toArray()
-            
+
             if (category === 'All' && !search) {
                 const result = await blogsCollection.find({}).toArray()
                 res.send(result)
             }
             else if (search) {
-                const result = posts.filter(post=>post.title.toLowerCase().includes(search))
+                const result = posts.filter(post => post.title.toLowerCase().includes(search?.toLocaleLowerCase()))
                 res.send(result)
             }
             else if (category) {
-                const filter = {category: category}
+                const filter = { category: category }
                 const result = await blogsCollection.find(filter).toArray()
                 res.send(result)
             }
@@ -264,6 +275,68 @@ async function run() {
             const filter = { _id: ObjectId(id) }
             const result = await favouriteCollection.deleteOne(filter)
             res.send(result)
+        })
+
+        // sslcommerz payment
+        app.post('/payment', (req, res) => {
+            const payment = req.body
+            const transactionId = new ObjectId().toString();
+            const filter = { email: payment?.paidEmail }
+            const updatedDoc = { $set: { paid: false, transactionId } }
+            const options = {upsert: true}
+            const data = {
+                total_amount: 200,
+                currency: 'BDT',
+                tran_id: transactionId,
+                success_url: `http://localhost:5000/payment/success?transactionId=${transactionId}`,
+                fail_url: 'http://localhost:5000/payment/fail',
+                cancel_url: 'http://localhost:5000/payment/cancel',
+                ipn_url: 'http://localhost:5000/payment/ipn',
+                shipping_method: 'Online',
+                product_name: 'Subscription.',
+                product_category: 'Blogs',
+                product_profile: 'Blogger',
+                cus_name: payment?.paidBy,
+                cus_email: payment?.paidEmail,
+                cus_add1: payment?.time,
+                cus_add2: payment?.date,
+                cus_city: 'Dhaka',
+                cus_state: 'Dhaka',
+                cus_postcode: '1000',
+                cus_country: 'Bangladesh',
+                cus_phone: '01711111111',
+                cus_fax: '01711111111',
+                ship_name: payment?.paidBy,
+                ship_add1: 'Dhaka',
+                ship_add2: 'Dhaka',
+                ship_city: 'Dhaka',
+                ship_state: 'Dhaka',
+                ship_postcode: 1000,
+                ship_country: 'Bangladesh',
+
+            };
+            const sslcz = new SSLCommerzPayment(storeId, storePassword, isLive)
+            sslcz.init(data).then(apiResponse => {
+                let GatewayPageURL = apiResponse.GatewayPageURL
+                userCollection.updateOne(filter, updatedDoc, options)
+                res.send({url: GatewayPageURL})
+            });
+        })
+        app.post('/payment/success', async (req, res) => {
+            const transactionId = req.query.transactionId;
+            const filter = { transactionId }
+            const updatedDoc = {
+                $set: {
+                    paid: true,
+                    paidAt: new Date(),
+                }
+            }
+            const options = { upsert: true }
+            const result = await userCollection.updateOne(filter, updatedDoc, options)
+            if (result.modifiedCount > 0) {
+                res.redirect(`http://localhost:3000/payment/success?transactionId=${transactionId}`)
+            }
+
         })
 
     } finally { }
