@@ -41,6 +41,12 @@ async function run() {
             const result = await userCollection.find({}).toArray()
             res.send(result)
         })
+        app.get('/user/:email', async (req, res) => {
+            const email = req.params.email
+            const filter = {email}
+            const result = await userCollection.findOne(filter)
+            res.send(result)
+        })
         app.delete('/users/:id', async (req, res) => {
             const id = req.params.id
             const filter = { _id: ObjectId(id) }
@@ -73,11 +79,13 @@ async function run() {
         })
         app.put('/blogger-request/:email', async (req, res) => {
             const email = req.params.email
+            const speciality = req.body.speciality
             const filter = { email }
             const options = { upsert: true }
             const updatedDoc = {
                 $set: {
-                    role: 'blogger'
+                    role: 'blogger',
+                    speciality: speciality
                 }
             }
             const result = await userCollection.updateOne(filter, updatedDoc, options)
@@ -88,6 +96,18 @@ async function run() {
         app.get('/bloggers', async (req, res) => {
             const filter = { role: 'blogger' }
             const result = await userCollection.find(filter).toArray()
+            res.send(result)
+        })
+        app.get('/users/:email', async (req, res) => {
+            const email = req.params.email
+            const filter = { email }
+            const result = await userCollection.findOne(filter)
+            res.send({bloggerId: result._id})
+        })
+        app.get('/blogger/:id', async (req, res) => {
+            const id = req.params.id
+            const filter = { _id: ObjectId(id) }
+            const result = await userCollection.findOne(filter)
             res.send(result)
         })
         app.put('/bloggers/:id', async (req, res) => {
@@ -104,7 +124,7 @@ async function run() {
         })
         app.get('/users/blogger/:email', async (req, res) => {
             const email = req.params.email
-            const filter = { email, paid:true }
+            const filter = { email, paid: true }
             const user = await userCollection.findOne(filter)
             res.send({ isBlogger: user?.role === 'blogger' })
         })
@@ -194,8 +214,8 @@ async function run() {
         // dashboard blogs
         app.get('/dashboard/blogs/:email', async (req, res) => {
             const email = req.params.email
-            console.log(email)
-            if (email === 'shahtazrahman17@gmail.com') {
+            const user = await userCollection.findOne({ email })
+            if(user?.role === 'admin'){
                 const result = await blogsCollection.find({}).toArray()
                 res.send(result)
             }
@@ -283,7 +303,7 @@ async function run() {
             const transactionId = new ObjectId().toString();
             const filter = { email: payment?.paidEmail }
             const updatedDoc = { $set: { paid: false, transactionId } }
-            const options = {upsert: true}
+            const options = { upsert: true }
             const data = {
                 total_amount: 200,
                 currency: 'BDT',
@@ -319,7 +339,7 @@ async function run() {
             sslcz.init(data).then(apiResponse => {
                 let GatewayPageURL = apiResponse.GatewayPageURL
                 userCollection.updateOne(filter, updatedDoc, options)
-                res.send({url: GatewayPageURL})
+                res.send({ url: GatewayPageURL })
             });
         })
         app.post('/payment/success', async (req, res) => {
